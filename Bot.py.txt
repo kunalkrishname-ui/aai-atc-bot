@@ -1,0 +1,101 @@
+import requests
+from bs4 import BeautifulSoup
+import telegram
+import time
+import os
+import feedparser
+
+BOT_TOKEN = ": 8386948834: AAHXbG0M-1kBc51kKa1Yi
+tSLF6chPnZ6jJs"
+CHANNEL_ID = "1002019074558"
+
+bot = telegram.Bot(token=BOT_TOKEN)
+
+KEYWORDS = ["ATC", "Air Traffic", "Junior Executive"]
+
+POSTED_FILE = "posted.txt"
+
+AAI_URL = "https://www.aai.aero/en/careers/recruitment"
+PIB_RSS = "https://pib.gov.in/rssfeed.aspx"
+EMPLOYMENT_NEWS = "https://www.employmentnews.gov.in/"
+
+def get_posted():
+    if not os.path.exists(POSTED_FILE):
+        return []
+    with open(POSTED_FILE, "r") as f:
+        return f.read().splitlines()
+
+def save_post(title):
+    with open(POSTED_FILE, "a") as f:
+        f.write(title + "\n")
+
+def send_message(title, link, source):
+    message = f"""
+🚨 <b>AAI ATC Related Update Found!</b>
+
+📌 <b>Title:</b> {title}
+🌐 <b>Source:</b> {source}
+
+🔗 <b>Official Link:</b>
+{link}
+
+📢 Join for fastest aviation job updates!
+"""
+    bot.send_message(
+        chat_id=CHANNEL_ID,
+        text=message,
+        parse_mode="HTML",
+        disable_web_page_preview=False
+    )
+
+def check_aai():
+    response = requests.get(AAI_URL)
+    soup = BeautifulSoup(response.text, "html.parser")
+    links = soup.find_all("a")
+    posted = get_posted()
+
+    for link in links:
+        text = link.text.strip()
+        if any(keyword in text for keyword in KEYWORDS):
+            if text not in posted:
+                href = link.get("href")
+                if not href.startswith("http"):
+                    href = "https://www.aai.aero" + href
+                send_message(text, href, "AAI Official")
+                save_post(text)
+
+def check_pib():
+    feed = feedparser.parse(PIB_RSS)
+    posted = get_posted()
+
+    for entry in feed.entries:
+        title = entry.title
+        if any(keyword in title for keyword in KEYWORDS):
+            if title not in posted:
+                send_message(title, entry.link, "PIB")
+                save_post(title)
+
+def check_employment_news():
+    response = requests.get(EMPLOYMENT_NEWS)
+    soup = BeautifulSoup(response.text, "html.parser")
+    links = soup.find_all("a")
+    posted = get_posted()
+
+    for link in links:
+        text = link.text.strip()
+        if any(keyword in text for keyword in KEYWORDS):
+            if text not in posted:
+                href = link.get("href")
+                if not href.startswith("http"):
+                    href = EMPLOYMENT_NEWS + href
+                send_message(text, href, "Employment News")
+                save_post(text)
+
+while True:
+    try:
+        check_aai()
+        check_pib()
+        check_employment_news()
+        time.sleep(3600)  # check every hour
+    except:
+        time.sleep(600)
